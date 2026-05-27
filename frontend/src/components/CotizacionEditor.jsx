@@ -68,6 +68,29 @@ export default function CotizacionEditor({ oportunidadId, scoreRelevancia }) {
     onSuccess: invalidate,
   });
 
+  const pdfMutation = useMutation({
+    mutationFn: async () => {
+      const response = await api.get(`/cotizaciones/${cotizacion.id}/pdf`, {
+        responseType: "blob",
+      });
+      return response;
+    },
+    onSuccess: (response) => {
+      const blob = new Blob([response.data], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      const disposicion = response.headers["content-disposition"] || "";
+      const match = disposicion.match(/filename="?([^";]+)"?/);
+      link.download = match ? match[1] : `cotizacion-${cotizacion.id}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      invalidate();
+    },
+  });
+
   if (cotizacionQuery.isLoading) {
     return (
       <Card>
@@ -144,22 +167,31 @@ export default function CotizacionEditor({ oportunidadId, scoreRelevancia }) {
               </strong>
             </div>
           </div>
-          {cotizacion.pdf_url ? (
-            <a
-              href={cotizacion.pdf_url}
-              download
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex rounded-md bg-talinay px-4 py-2 text-sm font-medium text-white hover:bg-talinay-dark"
+          <div className="flex flex-wrap items-center gap-3">
+            {cotizacion.pdf_url && (
+              <a
+                href={cotizacion.pdf_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex rounded-md bg-talinay px-4 py-2 text-sm font-medium text-white hover:bg-talinay-dark"
+              >
+                Descargar PDF
+              </a>
+            )}
+            <button
+              type="button"
+              onClick={() => pdfMutation.mutate()}
+              disabled={pdfMutation.isPending}
+              className="inline-flex rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
             >
-              Descargar PDF
-            </a>
-          ) : (
-            <div className="inline-flex items-center gap-2 text-sm text-slate-500">
-              <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-slate-400" />
-              Generando PDF...
-            </div>
-          )}
+              {pdfMutation.isPending
+                ? "Generando PDF..."
+                : cotizacion.pdf_url
+                  ? "Regenerar PDF"
+                  : "Generar PDF"}
+            </button>
+          </div>
+          <ErrorMessage error={pdfMutation.error} />
         </div>
       ) : (
         <div className="space-y-4">
