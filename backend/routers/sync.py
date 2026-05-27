@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException
 
 from database import get_db
 from services.apify import ApifyError, sincronizar_compras_agiles
+from services.ia import analizar_relevancia
 
 router = APIRouter(prefix="/sync", tags=["sync"])
 
@@ -42,8 +43,23 @@ def sync_compras_agiles() -> dict:
         _registrar_sync_log("compras_agiles", len(oportunidades), 0, errores)
         raise HTTPException(status_code=500, detail=f"Error guardando en BD: {exc}")
 
+    # Analizar solo las nuevas — las existentes ya tienen score.
+    nuevas_ops = [op for op in oportunidades if op["codigo"] not in set_existentes]
+    for op in nuevas_ops:
+        try:
+            resultado = analizar_relevancia(op)
+            db.table("oportunidades").update(
+                {
+                    "score_relevancia": resultado["score"],
+                    "justificacion_ia": resultado["justificacion"],
+                    "categoria": resultado["categoria"],
+                }
+            ).eq("codigo", op["codigo"]).execute()
+        except Exception as exc:
+            errores.append(f"Error analizando {op['codigo']}: {exc}")
+
     sincronizadas = len(oportunidades)
-    nuevas = sum(1 for c in codigos if c not in set_existentes)
+    nuevas = len(nuevas_ops)
 
     _registrar_sync_log("compras_agiles", sincronizadas, nuevas, errores)
 
