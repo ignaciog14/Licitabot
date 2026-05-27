@@ -1,7 +1,12 @@
 from fastapi import APIRouter, HTTPException
 
 from database import get_db
-from services.ia import SCORE_UMBRAL_RELEVANTE, analizar_relevancia
+from services.ia import (
+    CotizacionIAError,
+    SCORE_UMBRAL_RELEVANTE,
+    analizar_relevancia,
+    generar_cotizacion,
+)
 
 router = APIRouter(prefix="/oportunidades", tags=["oportunidades"])
 
@@ -25,10 +30,7 @@ def listar_oportunidades(min_score: int = SCORE_UMBRAL_RELEVANTE) -> list[dict]:
 
 @router.post("/{oportunidad_id}/analizar")
 def reanalizar_oportunidad(oportunidad_id: str) -> dict:
-    try:
-        db = get_db()
-    except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc))
+    db = _get_db_or_503()
 
     response = (
         db.table("oportunidades")
@@ -52,3 +54,118 @@ def reanalizar_oportunidad(oportunidad_id: str) -> dict:
     ).eq("id", oportunidad_id).execute()
 
     return resultado
+
+
+@router.post("/{oportunidad_id}/generar-cotizacion")
+def generar_cotizacion_endpoint(oportunidad_id: str, force: bool = False) -> dict:
+    db = _get_db_or_503()
+
+    response = (
+        db.table("oportunidades")
+        .select("*")
+        .eq("id", oportunidad_id)
+        .limit(1)
+        .execute()
+    )
+    if not response.data:
+        raise HTTPException(status_code=404, detail="Oportunidad no encontrada")
+
+    oportunidad = response.data[0]
+    score = oportunidad.get("score_relevancia") or 0
+    if score < SCORE_UMBRAL_RELEVANTE:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Score {score} es menor al umbral {SCORE_UMBRAL_RELEVANTE}; "
+                "esta oportunidad no es relevante para Talinay."
+            ),
+        )
+
+    existente_resp = (
+        db.table("cotizaciones")
+        .select("*")
+        .eq("oportunidad_id", oportunidad_id)
+        .order("created_at", desc=True)
+        .limit(1)
+        .execute()
+    )
+    existente = existente_resp.data[0] if existente_resp.data else None
+
+    if existente and existente["estado"] == "aprobada":
+        raise HTTPException(
+            status_code=409,
+            detail="La cotización ya está aprobada y no puede regenerarse.",
+        )
+
+    if existente and not force:
+        raise HTTPException(
+            status_code=409,
+            detail="Ya existe una cotización para esta oportunidad. Pasa ?force=true para regenerarla.",
+        )
+
+    try:
+        texto = generar_cotizacion(oportunidad)
+    except CotizacionIAError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+
+    if existente:
+        cot_id = existente["id"]
+        db.table("cotizaciones").update(
+            {
+                "borrador_ia": texto,
+                "borrador_editado": None,
+                "precio_ofertado": None,
+                "plazo_entrega_dias": None,
+                "estado": "borrador",
+            }
+        ).eq("id", cot_id).execute()
+        actual = (
+            db.table("cotizaciones")
+            .select("*")
+            .eq("id", cot_id)
+            .limit(1)
+            .execute()
+        )
+        return actual.data[0]
+
+    nueva = (
+        db.table("cotizaciones")
+        .insert(
+            {
+                "oportunidad_id": oportunidad_id,
+                "borrador_ia": texto,
+                "estado": "borrador",
+            }
+        )
+        .execute()
+    )
+    db.table("oportunidades").update({"estado_interno": "cotizado"}).eq(
+        "id", oportunidad_id
+    ).execute()
+    return nueva.data[0]
+
+
+@router.get("/{oportunidad_id}/cotizacion")
+def obtener_cotizacion(oportunidad_id: str) -> dict:
+    db = _get_db_or_503()
+    response = (
+        db.table("cotizaciones")
+        .select("*")
+        .eq("oportunidad_id", oportunidad_id)
+        .order("created_at", desc=True)
+        .limit(1)
+        .execute()
+    )
+    if not response.data:
+        raise HTTPException(
+            status_code=404,
+            detail="No hay cotización para esta oportunidad",
+        )
+    return response.data[0]
+
+
+def _get_db_or_503():
+    try:
+        return get_db()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
