@@ -164,6 +164,21 @@ def obtener_cotizacion(oportunidad_id: str) -> dict:
     return response.data[0]
 
 
+@router.get("/{oportunidad_id}")
+def obtener_oportunidad(oportunidad_id: str) -> dict:
+    db = _get_db_or_503()
+    response = (
+        db.table("oportunidades")
+        .select("*")
+        .eq("id", oportunidad_id)
+        .limit(1)
+        .execute()
+    )
+    if not response.data:
+        raise HTTPException(status_code=404, detail="Oportunidad no encontrada")
+    return response.data[0]
+
+
 def _get_db_or_503():
     try:
         return get_db()
