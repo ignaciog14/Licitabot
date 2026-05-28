@@ -24,6 +24,9 @@ export default function Layout({ children }) {
                 <NavLink to="/historial" className={linkClass}>
                   Historial
                 </NavLink>
+                <NavLink to="/configuracion" className={linkClass}>
+                  Palabras clave
+                </NavLink>
               </div>
             </div>
           </div>

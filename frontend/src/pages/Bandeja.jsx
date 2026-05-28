@@ -8,7 +8,7 @@ import OpportunityRow from "../components/OpportunityRow.jsx";
 import { tiempoRelativoDesde } from "../lib/format.js";
 
 const POR_PAGINA = 20;
-const SCORE_DEFAULT = "50";
+const SCORE_DEFAULT = "1";
 
 export default function Bandeja() {
   const [searchParams, setSearchParams] = useSearchParams();

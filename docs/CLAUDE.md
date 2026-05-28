@@ -1,6 +1,6 @@
-# CLAUDE.md
+# CLAUDE.md — Talinay Compras Públicas
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Contexto persistente para Claude Code. Leer antes de cualquier tarea.
 
 ---
 
@@ -8,46 +8,29 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Sistema semi-automático de detección y postulación a **Compras Ágiles** y licitaciones de Mercado Público, desarrollado para **Industrial y Comercial Talinay Ltda.** (talinay.cl).
 
-El problema: Talinay es una fábrica con 35+ años que pierde oportunidades de venta al Estado porque nadie tiene tiempo de revisar el portal todos los días. Este sistema automatiza el monitoreo, el análisis de relevancia con IA, y la generación de cotizaciones. El humano solo aprueba y sube la cotización final.
+El problema: Talinay es una fábrica con 35+ años de historia que pierde oportunidades de venta al Estado simplemente porque nadie tiene tiempo de revisar el portal todos los días. Este sistema automatiza el monitoreo, el análisis de relevancia con IA, y la generación de cotizaciones. El humano solo aprueba y sube la cotización final.
 
 Objetivo futuro: monetizar como SaaS para otras PYMEs chilenas.
 
 ---
 
-## Comandos de desarrollo
+## Empresa cliente — Talinay
 
-### Frontend
-```bash
-cd frontend
-npm install
-npm run dev        # dev server en http://localhost:5173
-npm run build      # build de producción
-npm run lint       # ESLint
-```
-
-### Backend
-```bash
-cd backend
-python -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-uvicorn main:app --reload   # dev server en http://localhost:8000
-```
-
-### Pruebas
-```bash
-# Backend
-cd backend && pytest
-pytest tests/test_ia.py     # un solo archivo
-pytest -k "test_filtro"     # un solo test por nombre
-
-# Frontend
-cd frontend && npm test
-```
+- **Razón social**: Industrial y Comercial Talinay Ltda.
+- **Dirección**: Iquique 3423, Estación Central, Santiago
+- **Web**: https://talinay.cl
+- **Rubros / productos**:
+  - Artículos de librería (tintas, tampones, sellos, artículos de oficina)
+  - Pinturas (acrílicas, temperas, pinturas para género/tela)
+  - Manualidades (materiales creativos, escolares)
+  - Poliestireno / Plumavit (planchas, cortes a medida)
+  - Fieltros (mantas, discos de pulir, productos dimensionados)
+  - Industrial (silicones, aceites, emulsiones, pastas)
+- **Clientes objetivo en MP**: colegios, municipalidades, hospitales, organismos públicos
 
 ---
 
-## Arquitectura general
+## Flujo del sistema
 
 ```
 [Apify Actor]          [API MP oficial]       [Perfil Talinay]
@@ -66,51 +49,43 @@ Compras Ágiles    +    Licitaciones L1    +   rubros/precios
               [PDF descargable → subir a mercadopublico.cl]
 ```
 
-### Capas del backend
-
-| Módulo | Responsabilidad |
-|--------|----------------|
-| `backend/services/ia.py` | Toda la lógica de Claude API (filtro + cotización) |
-| `backend/services/apify.py` | Integración con Apify Actor para Compras Ágiles |
-| `backend/services/mercado_publico.py` | API oficial MP para licitaciones L1 |
-| `backend/main.py` | FastAPI: endpoints REST, punto de entrada |
-
-### Capas del frontend
-
-| Carpeta | Responsabilidad |
-|---------|----------------|
-| `frontend/src/lib/` | Clientes de API, helpers, utilidades |
-| `frontend/src/components/` | Componentes React reutilizables |
-| `frontend/src/pages/` | Vistas principales (React Router) |
-
 ---
 
 ## Stack técnico
 
-- **Frontend**: React + Vite + TailwindCSS, React Router, React Query
-- **Backend**: FastAPI (Python 3.11+)
-- **Base de datos**: Supabase (PostgreSQL + Auth + Storage)
-- **IA**: Claude API — modelo `claude-sonnet-4-20250514`
-- **Scraping**: Apify Actor `licify/mercadopublico-compraagil`
-- **Deploy**: Vercel (frontend) + Railway (backend)
+### Frontend
+- React + Vite + TailwindCSS
+- React Router para navegación
+- React Query para fetching/cache
+- Carpeta: `/frontend`
 
----
+### Backend
+- Python (FastAPI) o Node.js — TBD según preferencia del equipo
+- Carpeta: `/backend`
 
-## APIs externas
+### Base de datos
+- **Supabase** (PostgreSQL + Auth + Storage)
+- Auth para el usuario admin de Talinay
 
-### Apify — Compras Ágiles
-- Endpoint: `https://api.apify.com/v2/acts/mG8Eiq2gFtrM5JHdy/runs`
-- Acciones relevantes: `list-compraagil`, `get-compraagil`, `list-files`
-- Status relevante: `Publicada` (abierta para cotizar)
-- Costo: ~$0.10 / 1,000 resultados
+### APIs externas
+- **Apify Actor** `licify/mercadopublico-compraagil` — scraper de Compras Ágiles
+  - Endpoint: `https://api.apify.com/v2/acts/mG8Eiq2gFtrM5JHdy/runs`
+  - Costo: ~$0.10 / 1,000 resultados
+  - Acciones: `list-compraagil`, `get-compraagil`, `list-files`
+  - Status relevante: `Publicada` (abiertas para cotizar)
+- **API oficial Mercado Público** — licitaciones tradicionales
+  - Base URL: `https://api.mercadopublico.cl/servicios/v1/`
+  - Auth: ticket en query param `?ticket=TU_TICKET`
+  - Ticket de prueba: `F8537A18-6766-4DEF-9E59-426B4FEE2844`
+- **Claude API** (Anthropic) — motor de IA
+  - Modelo: `claude-sonnet-4-20250514`
+  - Uso: filtro de relevancia + generación de cotizaciones
+- **Supabase** — BD y auth
 
-### API oficial Mercado Público — Licitaciones
-- Base URL: `https://api.mercadopublico.cl/servicios/v1/`
-- Auth: `?ticket=TU_TICKET` en query param
-
-### Claude API
-- Modelo: `claude-sonnet-4-20250514`
-- Dos usos: filtro de relevancia y generación de cotizaciones
+### Infraestructura
+- Frontend: Vercel
+- Backend: Railway o Render
+- Variables de entorno: nunca hardcodeadas, siempre en `.env`
 
 ---
 
@@ -131,7 +106,7 @@ descripcion text
 region text
 raw_data jsonb                       -- respuesta completa de la API
 score_relevancia integer             -- 0-100, calculado por IA
-justificacion_ia text
+justificacion_ia text                -- por qué la IA lo consideró relevante
 estado_interno text default 'pendiente'  -- 'pendiente'|'cotizado'|'descartado'|'ganado'|'perdido'
 created_at timestamptz default now()
 updated_at timestamptz default now()
@@ -163,25 +138,37 @@ created_at timestamptz default now()
 
 ---
 
-## Prompts de IA
+## Palabras clave para el filtro de relevancia
 
-### Filtro de relevancia
+La IA debe comparar el texto de cada oportunidad contra estos términos:
 
 ```python
 KEYWORDS_TALINAY = [
+    # Librería / oficina
     "librería", "artículos de oficina", "insumos escolares", "papelería",
     "tinta", "tampón", "sello", "plumón", "lápiz", "cuaderno",
+    # Pinturas
     "pintura", "acrílica", "tempera", "pintura tela", "pintura género",
     "brocha", "rodillo", "barniz",
+    # Manualidades / educación
     "manualidades", "materiales didácticos", "arte", "creatividad",
     "materiales escolares", "útiles escolares",
+    # Poliestireno
     "poliestireno", "plumavit", "foam", "espuma", "plancha",
     "corte a medida", "aislante",
+    # Fieltro
     "fieltro", "disco de pulir", "paño industrial",
+    # Industrial
     "silicona", "aceite industrial", "emulsión", "pasta industrial",
     "lubricante", "sellador",
 ]
+```
 
+---
+
+## Prompt base para filtro de relevancia
+
+```python
 PROMPT_FILTRO = """
 Eres un asistente especializado en compras públicas chilenas.
 
@@ -204,7 +191,7 @@ Responde en JSON con este formato exacto:
   "score": <0-100>,
   "aplica": <true|false>,
   "categoria": "<librería|pinturas|manualidades|poliestireno|fieltro|industrial|ninguna>",
-  "justificacion": "<máximo 2 oraciones>",
+  "justificacion": "<máximo 2 oraciones explicando por qué aplica o no>",
   "productos_sugeridos": ["<producto Talinay 1>", "<producto Talinay 2>"]
 }}
 
@@ -213,7 +200,9 @@ Umbral para notificar: score >= 50.
 """
 ```
 
-### Generación de cotización
+---
+
+## Prompt base para generación de cotización
 
 ```python
 PROMPT_COTIZACION = """
@@ -237,6 +226,8 @@ El borrador debe incluir:
 3. Plazo de entrega sugerido (en días hábiles)
 4. Condiciones de despacho
 5. Texto profesional listo para copiar en el portal
+
+Sé directo y profesional. El usuario editará los precios exactos antes de enviar.
 """
 ```
 
@@ -244,10 +235,55 @@ El borrador debe incluir:
 
 ## Convenciones de código
 
-- Commits en español: `tipo: descripción corta`
+- Commits en español, formato: `tipo: descripción corta`
   - Tipos: `feat`, `fix`, `refactor`, `docs`, `chore`
+  - Ejemplo: `feat: agregar filtro de relevancia con Claude API`
+- Variables de entorno siempre en `.env`, nunca hardcodeadas
 - Componentes React en PascalCase, archivos en kebab-case
-- Toda lógica de IA en `backend/services/ia.py`
-- Toda lógica de Apify en `backend/services/apify.py`
-- Toda lógica de MP oficial en `backend/services/mercado_publico.py`
-- Funciones utilitarias en `frontend/src/lib/` o `backend/utils/`
+- Funciones utilitarias en `/frontend/src/lib/` o `/backend/utils/`
+- Toda lógica de IA en `/backend/services/ia.py` (o `.js`)
+- Toda lógica de Apify en `/backend/services/apify.py`
+- Toda lógica de MP oficial en `/backend/services/mercado_publico.py`
+
+---
+
+## Variables de entorno requeridas
+
+### Frontend (`/frontend/.env`)
+```
+VITE_SUPABASE_URL=
+VITE_SUPABASE_ANON_KEY=
+VITE_API_URL=http://localhost:8000
+```
+
+### Backend (`/backend/.env`)
+```
+SUPABASE_URL=
+SUPABASE_SERVICE_KEY=
+ANTHROPIC_API_KEY=
+APIFY_API_TOKEN=
+MP_TICKET=
+```
+
+---
+
+## Estado actual del proyecto
+
+- [ ] Repo creado y estructura base
+- [ ] Supabase: proyecto creado y tablas migradas
+- [ ] Apify: cuenta creada y Actor probado
+- [ ] Backend: endpoint `/sync` que trae Compras Ágiles
+- [ ] IA: filtro de relevancia funcionando
+- [ ] IA: generador de cotizaciones funcionando
+- [ ] Frontend: bandeja de oportunidades
+- [ ] Frontend: vista detalle + editor de cotización
+- [ ] Frontend: generación de PDF
+- [ ] Deploy: Vercel (frontend) + Railway (backend)
+
+---
+
+## Contacto del proyecto
+
+- Cliente: Industrial y Comercial Talinay Ltda.
+- Web: https://talinay.cl
+- Correo: talinay@talinay.cl

@@ -1,94 +1,72 @@
 from fastapi import APIRouter, HTTPException
 
 from database import get_db
-from services.apify import ApifyError, sincronizar_compras_agiles
-from services.ia import analizar_relevancia
+from routers.configuracion import get_keywords
+from services.keywords import calcular_score
+from services.mercado_publico import MercadoPublicoError, sincronizar_licitaciones
 
 router = APIRouter(prefix="/sync", tags=["sync"])
 
 
 @router.post("/compras-agiles")
 def sync_compras_agiles() -> dict:
-    errores: list[str] = []
-
     try:
-        oportunidades = sincronizar_compras_agiles()
-    except ApifyError as exc:
+        oportunidades = sincronizar_licitaciones()
+    except MercadoPublicoError as exc:
         raise HTTPException(status_code=502, detail=str(exc))
 
     if not oportunidades:
-        _registrar_sync_log("compras_agiles", 0, 0, errores)
-        return {"sincronizadas": 0, "nuevas": 0, "errores": errores}
+        _registrar_sync_log("compras_agiles", 0, 0, [])
+        return {"sincronizadas": 0, "nuevas": 0, "errores": []}
 
     try:
         db = get_db()
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
 
+    keywords = get_keywords()
+
+    # Enriquecer con score de keywords antes de guardar
+    for op in oportunidades:
+        resultado = calcular_score(op, keywords)
+        op["score_relevancia"] = resultado["score"]
+        op["keywords_matched"] = resultado["keywords_matched"]
+        op["justificacion_ia"] = (
+            f"Matcheó: {', '.join(resultado['keywords_matched'])}"
+            if resultado["keywords_matched"]
+            else "Sin coincidencias con palabras clave"
+        )
+
     codigos = [op["codigo"] for op in oportunidades]
     existentes = (
-        db.table("oportunidades")
-        .select("codigo")
-        .in_("codigo", codigos)
-        .execute()
+        db.table("oportunidades").select("codigo").in_("codigo", codigos).execute()
     )
     set_existentes = {row["codigo"] for row in (existentes.data or [])}
 
     try:
-        db.table("oportunidades").upsert(
-            oportunidades, on_conflict="codigo"
-        ).execute()
+        db.table("oportunidades").upsert(oportunidades, on_conflict="codigo").execute()
     except Exception as exc:
-        errores.append(f"Error en upsert: {exc}")
-        _registrar_sync_log("compras_agiles", len(oportunidades), 0, errores)
         raise HTTPException(status_code=500, detail=f"Error guardando en BD: {exc}")
 
-    # Analizar solo las nuevas — las existentes ya tienen score.
-    nuevas_ops = [op for op in oportunidades if op["codigo"] not in set_existentes]
-    for op in nuevas_ops:
-        try:
-            resultado = analizar_relevancia(op)
-            db.table("oportunidades").update(
-                {
-                    "score_relevancia": resultado["score"],
-                    "justificacion_ia": resultado["justificacion"],
-                    "categoria": resultado["categoria"],
-                }
-            ).eq("codigo", op["codigo"]).execute()
-        except Exception as exc:
-            errores.append(f"Error analizando {op['codigo']}: {exc}")
+    nuevas = len([op for op in oportunidades if op["codigo"] not in set_existentes])
+    _registrar_sync_log("compras_agiles", len(oportunidades), nuevas, [])
 
-    sincronizadas = len(oportunidades)
-    nuevas = len(nuevas_ops)
-
-    _registrar_sync_log("compras_agiles", sincronizadas, nuevas, errores)
-
-    return {
-        "sincronizadas": sincronizadas,
-        "nuevas": nuevas,
-        "errores": errores,
-    }
+    return {"sincronizadas": len(oportunidades), "nuevas": nuevas, "errores": []}
 
 
 @router.post("/licitaciones")
 def sync_licitaciones() -> dict:
-    """Sync de licitaciones tradicionales (HU-05). Pendiente."""
-    return {"sincronizadas": 0, "nuevas": 0, "errores": []}
+    return sync_compras_agiles()
 
 
-def _registrar_sync_log(
-    tipo: str, encontradas: int, nuevas: int, errores: list[str]
-) -> None:
-    """Best-effort: no tumbar el endpoint por fallar el log."""
+def _registrar_sync_log(tipo: str, encontradas: int, nuevas: int, errores: list) -> None:
     try:
         db = get_db()
-        db.table("sync_log").insert(
-            {
-                "tipo": tipo,
-                "oportunidades_encontradas": encontradas,
-                "oportunidades_nuevas": nuevas,
-                "errores": errores or None,
-            }
-        ).execute()
+        db.table("sync_log").insert({
+            "tipo": tipo,
+            "oportunidades_encontradas": encontradas,
+            "oportunidades_nuevas": nuevas,
+            "errores": errores or None,
+        }).execute()
     except Exception:
         pass

@@ -1,31 +1,66 @@
 from fastapi import APIRouter, HTTPException
 
 from database import get_db
-from services.ia import (
-    CotizacionIAError,
-    SCORE_UMBRAL_RELEVANTE,
-    analizar_relevancia,
-    generar_cotizacion,
-)
+from routers.configuracion import get_keywords
+from services.keywords import calcular_score
 
 router = APIRouter(prefix="/oportunidades", tags=["oportunidades"])
 
 
 @router.get("")
-def listar_oportunidades(min_score: int = SCORE_UMBRAL_RELEVANTE) -> list[dict]:
+def listar_oportunidades(min_score: int = 1) -> list[dict]:
+    """Devuelve oportunidades con score >= min_score. Default 1 = solo las que matchean algo."""
     try:
         db = get_db()
-        response = (
-            db.table("oportunidades")
-            .select("*")
-            .gte("score_relevancia", min_score)
-            .order("score_relevancia", desc=True)
-            .order("created_at", desc=True)
-            .execute()
-        )
+        query = db.table("oportunidades").select("*")
+        if min_score > 0:
+            query = query.gte("score_relevancia", min_score)
+        response = query.order("score_relevancia", desc=True).order("created_at", desc=True).execute()
         return response.data or []
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
+
+
+@router.post("/recalcular-scores")
+def recalcular_scores() -> dict:
+    """Recalcula el score de TODAS las oportunidades con las keywords actuales."""
+    try:
+        db = get_db()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+
+    keywords = get_keywords()
+    items = db.table("oportunidades").select("id,nombre,descripcion,organismo").execute().data or []
+
+    # Calcular scores en Python y hacer upsert en batch
+    updates = []
+    for op in items:
+        resultado = calcular_score(op, keywords)
+        updates.append({
+            "id": op["id"],
+            "score_relevancia": resultado["score"],
+            "keywords_matched": resultado["keywords_matched"],
+            "justificacion_ia": (
+                f"Matcheó: {', '.join(resultado['keywords_matched'])}"
+                if resultado["keywords_matched"]
+                else "Sin coincidencias con palabras clave"
+            ),
+        })
+
+    if updates:
+        # Una sola llamada RPC que procesa todo en el servidor
+        payload = [
+            {
+                "id": u["id"],
+                "score": u["score_relevancia"],
+                "keywords_matched": u["keywords_matched"],
+                "justificacion_ia": u["justificacion_ia"],
+            }
+            for u in updates
+        ]
+        db.rpc("update_scores_bulk", {"updates": payload}).execute()
+
+    return {"actualizadas": len(updates), "keywords_usadas": len(keywords)}
 
 
 @router.post("/{oportunidad_id}/analizar")

@@ -17,9 +17,26 @@ export default function OpportunityRow({ oportunidad }) {
           <h3 className="truncate text-sm font-medium text-slate-900">
             {oportunidad.nombre || "(sin nombre)"}
           </h3>
-          <p className="truncate text-xs text-slate-500">
-            {oportunidad.organismo || "(sin organismo)"}
-          </p>
+          <div className="flex flex-wrap items-center gap-1 mt-0.5">
+            <span className="truncate text-xs text-slate-500">
+              {oportunidad.organismo || "(sin organismo)"}
+            </span>
+            {Array.isArray(oportunidad.keywords_matched) &&
+              oportunidad.keywords_matched.slice(0, 3).map((kw) => (
+                <span
+                  key={kw}
+                  className="rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-600 border border-blue-100"
+                >
+                  {kw}
+                </span>
+              ))}
+            {Array.isArray(oportunidad.keywords_matched) &&
+              oportunidad.keywords_matched.length > 3 && (
+                <span className="text-xs text-slate-400">
+                  +{oportunidad.keywords_matched.length - 3}
+                </span>
+              )}
+          </div>
         </div>
 
         <div className="hidden sm:block min-w-[120px] text-right text-sm text-slate-700">
