@@ -1,19 +1,19 @@
-# Talinay — Sistema de Compras Públicas
+# Licitabot — Sistema de Compras Públicas para Empresas
 
 Sistema semi-automático para detectar oportunidades en Mercado Público (Compras Ágiles y licitaciones), analizar relevancia con IA, y generar cotizaciones listas para enviar.
 
-Desarrollado para **Industrial y Comercial Talinay Ltda.** (https://talinay.cl)
+Diseñado para apoyar a empresas que venden al Estado en Chile.
 
 ---
 
 ## El problema
 
-Talinay es una fábrica con 35+ años de historia que pierde oportunidades de venta al Estado porque nadie tiene tiempo de revisar el portal todos los días. Este sistema automatiza el monitoreo y la generación de cotizaciones — el humano solo aprueba y sube el documento final.
+Muchas empresas pierden oportunidades de venta al Estado porque no tienen tiempo de revisar el portal todos los días. Este sistema automatiza el monitoreo y la generación de cotizaciones — el humano solo aprueba y sube el documento final.
 
 ## Cómo funciona
 
 1. El sistema consulta Compras Ágiles (via Apify) y licitaciones (API oficial MP) automáticamente
-2. La IA analiza cada oportunidad y le asigna un score de relevancia para Talinay
+2. La IA analiza cada oportunidad y le asigna un score de relevancia para la empresa usuaria
 3. Las oportunidades relevantes aparecen en el dashboard con un borrador de cotización generado
 4. El usuario revisa, edita si quiere, y descarga el PDF para subir a Mercado Público
 
@@ -33,7 +33,7 @@ Talinay es una fábrica con 35+ años de historia que pierde oportunidades de ve
 ## Estructura del repo
 
 ```
-talinay-compras/
+licitabot/
 ├── frontend/          # React + Vite
 │   ├── src/
 │   └── .env.example
@@ -59,8 +59,8 @@ talinay-compras/
 
 ```bash
 # Clonar
-git clone https://github.com/TU_USUARIO/talinay-compras.git
-cd talinay-compras
+git clone https://github.com/TU_USUARIO/licitabot.git
+cd licitabot
 
 # Frontend
 cd frontend
